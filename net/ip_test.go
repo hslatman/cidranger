@@ -8,6 +8,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// The net.IP type can either be length 4 []byte OR length 16,
+// but various methods return IPv4 addresses as IPv6 mapped
+// The most correct way to compare net.IP objects is thus net.IP.Equal.
+// https://golang.org/pkg/net/#IP.Equal
+func assertNetIPsEqual(t *testing.T, expected net.IP, actual net.IP) {
+	assert.Truef(t, expected.Equal(actual),
+		"expect: %#v\nactual: %#v", expected, actual,
+	)
+}
+
 func TestNewNetworkNumber(t *testing.T) {
 	cases := []struct {
 		ip   net.IP
@@ -136,6 +146,30 @@ func TestNetworkNumberNext(t *testing.T) {
 			ip := NewNetworkNumber(net.ParseIP(tc.ip))
 			expected := NewNetworkNumber(net.ParseIP(tc.next))
 			assert.Equal(t, expected, ip.Next())
+		})
+	}
+}
+
+func TestNetworkNext(t *testing.T) {
+	cases := []struct {
+		cidr string
+		next string
+		name string
+	}{
+		{"0.0.0.0/32", "0.0.0.1/32", "IPv4 /32"},
+		{"0.0.1.0/24", "0.0.2.0/24", "IPv4 /24"},
+		{"128.0.0.0/1", "0.0.0.0/1", "IPv4 /1 rollover"},
+		{"8000::0/128", "8000::1/128", "IPv6 basic"},
+		{"0000:ffff:ffff:ffff::/64", "1::/64", "IPv6 consecutive rollover"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cidr, _ := net.ParseCIDR(tc.cidr)
+			network := NewNetwork(*cidr)
+			_, next, _ := net.ParseCIDR(tc.next)
+			expected := NewNetwork(*next)
+			assert.Equal(t, expected, network.Next())
 		})
 	}
 }
@@ -397,6 +431,15 @@ func TestMask(t *testing.T) {
 	}
 }
 
+func TestToIP(t *testing.T) {
+	// ToIP had previously been making add addresses IPv6 length
+	ip := "1.2.3.4"
+	transformed := NewNetworkNumber(net.ParseIP(ip)).ToIP()
+	parsed := net.ParseIP(ip)
+	assertNetIPsEqual(t, transformed, parsed)
+	assert.NotNil(t, NewNetworkNumber(transformed).ToV4())
+}
+
 func TestNextIP(t *testing.T) {
 	cases := []struct {
 		ip   string
@@ -413,7 +456,7 @@ func TestNextIP(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, net.ParseIP(tc.next), NextIP(net.ParseIP(tc.ip)))
+			assertNetIPsEqual(t, net.ParseIP(tc.next), NextIP(net.ParseIP(tc.ip)))
 		})
 	}
 }
@@ -434,7 +477,7 @@ func TestPreviousIP(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, net.ParseIP(tc.next), PreviousIP(net.ParseIP(tc.ip)))
+			assertNetIPsEqual(t, net.ParseIP(tc.next), PreviousIP(net.ParseIP(tc.ip)))
 		})
 	}
 }

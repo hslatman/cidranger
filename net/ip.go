@@ -85,9 +85,6 @@ func (n NetworkNumber) ToIP() net.IP {
 		idx := i * net.IPv4len
 		binary.BigEndian.PutUint32(ip[idx:idx+net.IPv4len], n[i])
 	}
-	if len(ip) == net.IPv4len {
-		ip = net.IPv4(ip[0], ip[1], ip[2], ip[3])
-	}
 	return ip
 }
 
@@ -241,6 +238,30 @@ func (n Network) Equal(n1 Network) bool {
 
 func (n Network) String() string {
 	return n.IPNet.String()
+}
+
+// Next returns the next logical Network with the same mask
+func (n Network) Next() Network {
+	newIP := make(NetworkNumber, len(n.Number))
+	copy(newIP, n.Number)
+	prefix, all := n.IPNet.Mask.Size()
+	incr := uint32(1) << ((all - prefix) % BitsPerUint32)
+	i := (prefix - 1) / BitsPerUint32
+	newIP[i] += incr
+	// if rollover one of the uint32s, need to increment next chunk
+	if newIP[i] == 0 {
+		for i -= 1; i >= 0; i-- {
+			newIP[i]++
+			if newIP[i] > 0 {
+				break
+			}
+		}
+	}
+	return Network{
+		IPNet:  net.IPNet{IP: newIP.ToIP(), Mask: n.IPNet.Mask},
+		Number: newIP,
+		Mask:   n.Mask,
+	}
 }
 
 // NetworkNumberMask is an IP address.
