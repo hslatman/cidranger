@@ -35,6 +35,9 @@ var ErrVersionMismatch = fmt.Errorf("Network input version mismatch")
 // exists for the cidr ranges.
 var ErrNoGreatestCommonBit = fmt.Errorf("No greatest common bit")
 
+// ErrBadMaskLength is returned when a request mask is invalid
+var ErrBadMaskLength = fmt.Errorf("Mask length invalid")
+
 // NetworkNumber represents an IP address using uint32 as internal storage.
 // IPv4 usings 1 uint32, while IPv6 uses 4 uint32.
 type NetworkNumber []uint32
@@ -290,4 +293,22 @@ func NextIP(ip net.IP) net.IP {
 // PreviousIP returns the previous sequential ip.
 func PreviousIP(ip net.IP) net.IP {
 	return NewNetworkNumber(ip).Previous().ToIP()
+}
+
+// Subnet will return the subnets within the Network at the given prefix length.
+// The prefixlen must be larger than the current prefix.
+// If prefixlen is 0, will split the Network in half, /24 -> [/25, /25]
+func (n Network) Subnet(prefixlen int) ([]Network, error) {
+	ones, bits := n.IPNet.Mask.Size()
+	if prefixlen == 0 {
+		prefixlen = ones + 1
+	}
+	if ones > prefixlen || prefixlen > bits {
+		return nil, ErrBadMaskLength
+	}
+	subnets := []Network{n.Masked(prefixlen)}
+	for nsubnets := int(math.Pow(2, float64(prefixlen-ones))); len(subnets) < nsubnets; {
+		subnets = append(subnets, subnets[len(subnets)-1].Next())
+	}
+	return subnets, nil
 }

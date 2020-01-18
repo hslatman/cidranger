@@ -482,6 +482,46 @@ func TestPreviousIP(t *testing.T) {
 	}
 }
 
+func TestSubnet(t *testing.T) {
+	cases := []struct {
+		original string
+		prefix   int
+		subnets  []string
+		err      error
+		name     string
+	}{
+		{"0.0.0.0/8", 33, nil, ErrBadMaskLength, "IPv4 prefix too long"},
+		{"0.0.0.0/8", 4, nil, ErrBadMaskLength, "IPv4 prefix not a subnet"},
+		{"0.0.0.0/32", 0, nil, ErrBadMaskLength, "IPv4 can't split /32"},
+		{"0.0.0.0/0", 2, []string{"0.0.0.0/2", "64.0.0.0/2", "128.0.0.0/2", "192.0.0.0/2"}, nil, "IPv4 /0 to /2"},
+		{"10.0.0.0/8", 0, []string{"10.0.0.0/9", "10.128.0.0/9"}, nil, "IPv4 default split /8"},
+		{"::/128", 0, nil, ErrBadMaskLength, "IPv6 can't split /128"},
+		{"::/40", 32, nil, ErrBadMaskLength, "IPv6 prefix not a subnet"},
+		{"::/2", 4, []string{"::/4", "1000::/4", "2000::/4", "3000::/4"}, nil, "IPv6 /2 to /4"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ipNet, _ := net.ParseCIDR(tc.original)
+			original := NewNetwork(*ipNet)
+			subnets := []Network{}
+			for _, cidr := range tc.subnets {
+				_, subnet, _ := net.ParseCIDR(cidr)
+				subnets = append(subnets, NewNetwork(*subnet))
+			}
+			actual, err := original.Subnet(tc.prefix)
+			if tc.err == nil {
+				assert.Nil(t, err, "No error expected")
+			} else {
+				assert.Errorf(t, err, "Expected error: %v", tc.err)
+			}
+			if tc.err == nil && err == nil {
+				assert.Equal(t, subnets, actual)
+			}
+		})
+	}
+}
+
 /*
  *********************************
  Benchmarking ip manipulations.
