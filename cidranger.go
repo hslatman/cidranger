@@ -42,6 +42,8 @@ package cidranger
 import (
 	"fmt"
 	"net"
+
+	rnet "github.com/censys/cidranger/net"
 )
 
 // ErrInvalidNetworkInput is returned upon invalid network input.
@@ -90,10 +92,17 @@ type Ranger interface {
 	ContainingNetworks(ip net.IP) ([]RangerEntry, error)
 	CoveredNetworks(network net.IPNet) ([]RangerEntry, error)
 	Len() int
+	MissingNetworks() ([]net.IPNet, error)
 }
 
 // NewPCTrieRanger returns a versionedRanger that supports both IPv4 and IPv6
 // using the path compressed trie implemention.
 func NewPCTrieRanger() Ranger {
 	return newVersionedRanger(newPrefixTree)
+}
+
+// NewIPv4PCTrieRanger returns an IPv4-only Ranger for use-cases where the additional
+// version checking and second Trie overhead is not desired.
+func NewIPv4PCTrieRanger() Ranger {
+	return newPrefixTree(rnet.IPv4)
 }

@@ -61,6 +61,19 @@ func (v *versionedRanger) CoveredNetworks(network net.IPNet) ([]RangerEntry, err
 	return ranger.CoveredNetworks(network)
 }
 
+// MissingNetworks returns the list of networks that have no RangerEntry
+func (v *versionedRanger) MissingNetworks() ([]net.IPNet, error) {
+	missing4, err := v.ipV4Ranger.MissingNetworks()
+	if err != nil {
+		return nil, err
+	}
+	missing6, err := v.ipV4Ranger.MissingNetworks()
+	if err != nil {
+		return nil, err
+	}
+	return append(missing4, missing6...), nil
+}
+
 // Len returns number of networks in ranger.
 func (v *versionedRanger) Len() int {
 	return v.ipV4Ranger.Len() + v.ipV6Ranger.Len()

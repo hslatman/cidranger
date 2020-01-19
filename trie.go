@@ -1,6 +1,7 @@
 package cidranger
 
 import (
+	"container/list"
 	"fmt"
 	"net"
 	"strings"
@@ -123,6 +124,61 @@ func (p *prefixTrie) ContainingNetworks(ip net.IP) ([]RangerEntry, error) {
 func (p *prefixTrie) CoveredNetworks(network net.IPNet) ([]RangerEntry, error) {
 	net := rnet.NewNetwork(network)
 	return p.coveredNetworks(net)
+}
+
+// MissingNetworks returns the list of networks that have no RangerEntry
+// within the entire tree. Will return the smallets possible subnets.
+func (p *prefixTrie) MissingNetworks() ([]net.IPNet, error) {
+	missing := []net.IPNet{}
+	// use list as a queue of *prefixTrie for bredth-first traversal
+	todo := list.New()
+	todo.PushBack(p)
+	for todo.Len() > 0 {
+		element := todo.Front()
+		todo.Remove(element)
+		node := element.Value.(*prefixTrie)
+
+		if node.hasEntry() {
+			continue
+		}
+
+		// Given that this node and all its parents are empty, if any of the children
+		// are nil, that's a known missing net, but if both are missing, this node is
+		// the superset of those missing networks. This would only happen if the entry
+		// is removed from a leaf network.
+		if node.children[0] == nil && node.children[1] == nil {
+			missing = append(missing, node.network.IPNet)
+			continue
+		}
+		child_nets, err := node.network.Subnet(0)
+		if err != nil {
+			return nil, fmt.Errorf("programing error: should always have valid subnets: %s", err)
+		}
+		for bit, child := range node.children {
+			if child == nil {
+				missing = append(missing, child_nets[bit].IPNet)
+			} else {
+				// Need to add the child to be checked, but first account for all the
+				// subnets off the side of any compressed paths.
+				// numBitsSkipped is 1+ number of empty nodes
+				intermediate_subnet := child_nets[bit]
+				for i := 1; i < int(child.numBitsSkipped); i++ {
+					// need the "opposite side" subnet of each intermediate level
+					missing_side_bit := bit ^ 1
+					// between current node and the child that needs to be evaluated.
+					intermediate_subnets, err := intermediate_subnet.Subnet(0)
+					if err != nil {
+						return nil, fmt.Errorf("programming error: should always have valid subnets %s", err)
+					}
+					missing = append(missing, intermediate_subnets[missing_side_bit].IPNet)
+					intermediate_subnet = intermediate_subnets[bit]
+				}
+				todo.PushBack(child)
+			}
+		}
+	}
+
+	return missing, nil
 }
 
 // Len returns number of networks in ranger.
@@ -359,6 +415,16 @@ func (p *prefixTrie) targetBitFromIP(n rnet.NetworkNumber) (uint32, error) {
 
 func (p *prefixTrie) hasEntry() bool {
 	return p.entry != nil
+}
+
+func (p *prefixTrie) ancestorHasEntry() bool {
+	if p.hasEntry() {
+		return true
+	}
+	if p.parent == nil {
+		return p.hasEntry()
+	}
+	return p.parent.ancestorHasEntry()
 }
 
 func (p *prefixTrie) level() int {

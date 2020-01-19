@@ -482,6 +482,79 @@ func TestPrefixTrieCoveredNetworks(t *testing.T) {
 	}
 }
 
+type missingNetworkTest struct {
+	version  rnet.IPVersion
+	inserts  []string
+	networks []string
+	name     string
+}
+
+var missingNetworkTests = []missingNetworkTest{
+	{
+		rnet.IPv4,
+		[]string{},
+		[]string{"0.0.0.0/0"},
+		"empty missing networks",
+	},
+	{
+		rnet.IPv4,
+		[]string{"0.0.0.0/1"},
+		[]string{"128.0.0.0/1"},
+		"/1 missing networks",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/2"},
+		[]string{"64.0.0.0/2"},
+		"path compressed network segment is accounted for",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/5"},
+		[]string{"64.0.0.0/2", "32.0.0.0/3", "16.0.0.0/4", "8.0.0.0/5"},
+		"multiple path compressed segments",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/32"},
+		[]string{"64.0.0.0/2", "32.0.0.0/3", "16.0.0.0/4", "8.0.0.0/5", "4.0.0.0/6",
+			"2.0.0.0/7", "1.0.0.0/8", "0.128.0.0/9", "0.64.0.0/10", "0.32.0.0/11",
+			"0.16.0.0/12", "0.8.0.0/13", "0.4.0.0/14", "0.2.0.0/15", "0.1.0.0/16",
+			"0.0.128.0/17", "0.0.64.0/18", "0.0.32.0/19", "0.0.16.0/20", "0.0.8.0/21",
+			"0.0.4.0/22", "0.0.2.0/23", "0.0.1.0/24", "0.0.0.128/25", "0.0.0.64/26",
+			"0.0.0.32/27", "0.0.0.16/28", "0.0.0.8/29", "0.0.0.4/30", "0.0.0.2/31",
+			"0.0.0.1/32"},
+		"/32 missing handled correctly",
+	},
+	{
+		rnet.IPv6,
+		[]string{"::/1"},
+		[]string{"8000::/1"},
+		"/1 missing networks v6",
+	},
+}
+
+func TestPrefixTrieMissingNetworks(t *testing.T) {
+	for _, tc := range missingNetworkTests {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert)
+				err := trie.Insert(NewBasicRangerEntry(*network))
+				assert.NoError(t, err)
+			}
+			var expectedEntries []net.IPNet
+			for _, network := range tc.networks {
+				_, net, _ := net.ParseCIDR(network)
+				expectedEntries = append(expectedEntries, (*net))
+			}
+			networks, err := trie.MissingNetworks()
+			assert.NoError(t, err)
+			assert.Equal(t, expectedEntries, networks)
+		})
+	}
+}
+
 func TestTrieMemUsage(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping memory test in `-short` mode")

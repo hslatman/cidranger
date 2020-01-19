@@ -1,6 +1,7 @@
 package cidranger
 
 import (
+	"fmt"
 	"net"
 
 	rnet "github.com/censys/cidranger/net"
@@ -106,6 +107,11 @@ func (b *bruteRanger) CoveredNetworks(network net.IPNet) ([]RangerEntry, error) 
 		}
 	}
 	return results, nil
+}
+
+// MissingNetworks returns the list of networks that have no RangerEntry
+func (p *bruteRanger) MissingNetworks() ([]net.IPNet, error) {
+	return nil, fmt.Errorf("Not implemented")
 }
 
 // Len returns number of networks in ranger.
