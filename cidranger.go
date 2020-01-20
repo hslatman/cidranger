@@ -106,3 +106,16 @@ func NewPCTrieRanger() Ranger {
 func NewIPv4PCTrieRanger() Ranger {
 	return newPrefixTree(rnet.IPv4)
 }
+
+// Util function to leverage the subnet method on std lib net.IPNets
+func Subnets(base net.IPNet, prefixlen int) (subnets []net.IPNet, err error) {
+	network := rnet.NewNetwork(base)
+	subnetworks, err := network.Subnet(prefixlen)
+	if err != nil {
+		return
+	}
+	for _, subnet := range subnetworks {
+		subnets = append(subnets, subnet.IPNet)
+	}
+	return
+}

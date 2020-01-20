@@ -120,6 +120,42 @@ func testCoversNetworksAgainstBase(t *testing.T, iterations int, netGen networkG
 	}
 }
 
+func TestSubnets(t *testing.T) {
+	cases := []struct {
+		original string
+		prefix   int
+		subnets  []string
+		err      error
+		name     string
+	}{
+		{"0.0.0.0/8", 33, nil, rnet.ErrBadMaskLength, "IPv4 prefix too long"},
+		{"0.0.0.0/0", 2, []string{"0.0.0.0/2", "64.0.0.0/2", "128.0.0.0/2", "192.0.0.0/2"}, nil, "IPv4 /0 to /2"},
+		{"10.0.0.0/8", 0, []string{"10.0.0.0/9", "10.128.0.0/9"}, nil, "IPv4 default split /8"},
+		{"::/2", 4, []string{"::/4", "1000::/4", "2000::/4", "3000::/4"}, nil, "IPv6 /2 to /4"},
+		{"10.0.0.0/15", 15, []string{"10.0.0.0/15"}, nil, "IPv4 prefix self"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ipNet, _ := net.ParseCIDR(tc.original)
+			subnets := []net.IPNet{}
+			for _, cidr := range tc.subnets {
+				_, subnet, _ := net.ParseCIDR(cidr)
+				subnets = append(subnets, *subnet)
+			}
+			actual, err := Subnets(*ipNet, tc.prefix)
+			if tc.err == nil {
+				assert.Nil(t, err, "No error expected")
+			} else {
+				assert.Errorf(t, err, "Expected error: %v", tc.err)
+			}
+			if tc.err == nil && err == nil {
+				assert.Equal(t, subnets, actual)
+			}
+		})
+	}
+}
+
 /*
  ******************************************************************
  Benchmarks.

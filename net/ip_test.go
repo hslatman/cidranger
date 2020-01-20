@@ -498,6 +498,7 @@ func TestSubnet(t *testing.T) {
 		{"::/128", 0, nil, ErrBadMaskLength, "IPv6 can't split /128"},
 		{"::/40", 32, nil, ErrBadMaskLength, "IPv6 prefix not a subnet"},
 		{"::/2", 4, []string{"::/4", "1000::/4", "2000::/4", "3000::/4"}, nil, "IPv6 /2 to /4"},
+		{"10.0.0.0/15", 15, []string{"10.0.0.0/15"}, nil, "IPv4 prefix self"},
 	}
 
 	for _, tc := range cases {
