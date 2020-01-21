@@ -141,14 +141,25 @@ type RangerIter interface {
 }
 
 type bredthRangerIter struct {
-	path *list.List
-	node *prefixTrie
+	path    *list.List
+	node    *prefixTrie
+	shallow bool
 }
 
+// A bredth-first iterator that returns all netblocks with a RangerEntry
 func NewBredthIter(root *prefixTrie) bredthRangerIter {
+	return newBredthIter(root, false)
+}
+
+// A bredth-first iterator that will return only the largest netblocks with an entry
+func NewShallowBredthIter(root *prefixTrie) bredthRangerIter {
+	return newBredthIter(root, true)
+}
+func newBredthIter(root *prefixTrie, shallow bool) bredthRangerIter {
 	iter := bredthRangerIter{
-		node: root,
-		path: list.New(),
+		node:    root,
+		path:    list.New(),
+		shallow: shallow,
 	}
 	iter.path.PushBack(root)
 	return iter
@@ -159,6 +170,9 @@ func (i *bredthRangerIter) Next() bool {
 		element := i.path.Front()
 		i.path.Remove(element)
 		i.node = element.Value.(*prefixTrie)
+		if i.shallow && i.node.hasEntry() {
+			return true
+		}
 		for _, child := range i.node.children {
 			if child != nil {
 				i.path.PushBack(child)
@@ -177,4 +191,81 @@ func (i *bredthRangerIter) Get() RangerEntry {
 
 func (i *bredthRangerIter) Error() error {
 	return nil
+}
+
+// Rollup apply
+// Insert an entry at the parent of one or two children with entries, where the
+// RangerEntry objects at those children meet the criteria of a rollup function
+type RollupApply interface {
+	// Decides if siblings should be rolled up
+	CanRollup(child0 RangerEntry, child1 RangerEntry) bool
+	// Rolls up siblings into a parent entry
+	GetParentEntry(child0 RangerEntry, child1 RangerEntry, parentNet net.IPNet) RangerEntry
+}
+
+// Use a provided RollupApply and return the Ranger after modification
+func DoRollupApply(r Ranger, f RollupApply) (Ranger, error) {
+	trie, ok := r.(*prefixTrie)
+	if !ok {
+		return r, fmt.Errorf("DoRollupApply only implemented for prefixTrie-type Ranger")
+	}
+	// 1. Depth-first with a depth-stack?
+	// 2. determine all new entries
+	// 3. Insert all new entries
+	// 4. repeat 1. until no new entries generated
+	// Repeated traversal with entries between should be O(N*log(N))
+	// Doing this because of the path-compression optimization and how new nodes are
+	// inserted. If the entire tree was guaranteed to be filled-in, this could be O(N)?
+	for entries := getRollupEntries(trie, f); len(entries) > 0; entries = getRollupEntries(trie, f) {
+		for _, entry := range entries {
+			err := trie.Insert(entry)
+			if err != nil {
+				return r, err
+			}
+		}
+	}
+	return r, nil
+}
+
+func getRollupEntries(trie *prefixTrie, f RollupApply) []RangerEntry {
+	rollupEntries := []RangerEntry{}
+	depth := list.New()
+	depth.PushBack(trie)
+	for depth.Len() > 0 {
+		element := depth.Back()
+		depth.Remove(element)
+		node := element.Value.(*prefixTrie)
+		nchildren := node.childrenCount()
+		// Dead-end or already filled
+		if nchildren == 0 {
+			continue
+		}
+		// Need to check path of child if empty, BUT don't come back to this node
+		if nchildren == 1 {
+			child := node.children[0]
+			if child == nil {
+				child = node.children[1]
+			}
+			if !child.hasEntry() {
+				depth.PushBack(child)
+			}
+			continue
+		}
+		// If both have an entry, check to rollup
+		if node.children[0].hasEntry() && node.children[1].hasEntry() {
+			if f.CanRollup(node.children[0].entry, node.children[1].entry) {
+				rollupEntries = append(rollupEntries,
+					f.GetParentEntry(node.children[0].entry, node.children[1].entry, node.network.IPNet),
+				)
+			}
+			continue
+		}
+		// Visit children that don't have an entry, left depth-first
+		for _, bit := range []int{1, 0} {
+			if !node.children[bit].hasEntry() {
+				depth.PushBack(node.children[bit])
+			}
+		}
+	}
+	return rollupEntries
 }

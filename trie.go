@@ -436,6 +436,17 @@ func (p *prefixTrie) level() int {
 	return p.parent.level() + 1
 }
 
+func (p *prefixTrie) sibling() *prefixTrie {
+	if p.parent == nil {
+		return nil
+	}
+	if p.parent.children[0] == p {
+		return p.parent.children[1]
+	} else {
+		return p.parent.children[0]
+	}
+}
+
 // walkDepth walks the trie in depth order, for unit testing.
 func (p *prefixTrie) walkDepth() <-chan RangerEntry {
 	entries := make(chan RangerEntry)

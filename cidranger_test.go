@@ -189,7 +189,105 @@ func TestBredthRangerIter(t *testing.T) {
 			assert.Equal(t, expectedEntries, resultEntries)
 		})
 	}
+}
 
+// basic impl for a rollup based on weighted counts
+type RecordEntry struct {
+	net.IPNet
+	Records int
+}
+
+// Implement the cidranger.RangerEntry interface
+func (p RecordEntry) Network() net.IPNet {
+	return p.IPNet
+}
+
+type rollupCount struct {
+	rollupThreshold int
+}
+
+func (rc rollupCount) CanRollup(c0 RangerEntry, c1 RangerEntry) bool {
+	rc0, ok := c0.(RecordEntry)
+	if !ok {
+		panic(c0)
+	}
+	rc1, ok := c1.(RecordEntry)
+	if !ok {
+		panic(c1)
+	}
+	return rc0.Records+rc1.Records < rc.rollupThreshold
+}
+
+func (rc rollupCount) GetParentEntry(c0 RangerEntry, c1 RangerEntry, parentNet net.IPNet) RangerEntry {
+	rc0, ok := c0.(RecordEntry)
+	if !ok {
+		panic(c0)
+	}
+	rc1, ok := c1.(RecordEntry)
+	if !ok {
+		panic(c1)
+	}
+	return RecordEntry{parentNet, rc0.Records + rc1.Records}
+}
+
+func TestRollupApply(t *testing.T) {
+	type rawRecordEntry struct {
+		cidr  string
+		count int
+	}
+	cases := []struct {
+		version  rnet.IPVersion
+		inserts  []rawRecordEntry
+		expected []rawRecordEntry
+		err      error
+		name     string
+	}{
+		{rnet.IPv4,
+			[]rawRecordEntry{{"0.0.0.0/2", 10}, {"64.0.0.0/2", 20}},
+			[]rawRecordEntry{{"0.0.0.0/1", 30}},
+			nil, "single pair v4",
+		},
+		{rnet.IPv4,
+			[]rawRecordEntry{{"0.0.0.0/4", 3}, {"16.0.0.0/4", 7}, {"64.0.0.0/2", 20}},
+			[]rawRecordEntry{{"0.0.0.0/1", 30}},
+			nil, "nested pair v4",
+		},
+		{rnet.IPv4,
+			[]rawRecordEntry{{"0.0.0.0/4", 3}, {"16.0.0.0/4", 7}, {"64.0.0.0/2", 100}},
+			[]rawRecordEntry{{"0.0.0.0/3", 10}, {"64.0.0.0/2", 100}},
+			nil, "nested pair v4",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert.cidr)
+				err := trie.Insert(RecordEntry{*network, insert.count})
+				assert.NoError(t, err)
+			}
+			var expectedEntries []RecordEntry
+			for _, expected := range tc.expected {
+				_, network, _ := net.ParseCIDR(expected.cidr)
+				expectedEntries = append(expectedEntries, RecordEntry{*network, expected.count})
+			}
+			var resultEntries []RecordEntry
+			trie, err := DoRollupApply(trie, rollupCount{100})
+			if tc.err == nil {
+				assert.Nil(t, err, "No error expected")
+			} else {
+				assert.Errorf(t, err, "Expected error: %v", tc.err)
+			}
+			if tc.err == nil && err == nil {
+				iter := NewShallowBredthIter(trie.(*prefixTrie))
+				for iter.Next() {
+					entry := iter.Get()
+					resultEntries = append(resultEntries, entry.(RecordEntry))
+				}
+				assert.Equal(t, expectedEntries, resultEntries)
+			}
+		})
+	}
 }
 
 /*
