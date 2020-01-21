@@ -122,7 +122,7 @@ func Subnets(base net.IPNet, prefixlen int) (subnets []net.IPNet, err error) {
 }
 
 // RangerIter is an interface to use with an iterator-like pattern
-// ri := RangerIter(x Ranger)
+// ri := NewBredthIter(ptrie)
 // for ri.Next() {
 //     entry := ri.Get()
 //     ...
@@ -147,15 +147,19 @@ type bredthRangerIter struct {
 }
 
 // A bredth-first iterator that returns all netblocks with a RangerEntry
-func NewBredthIter(root *prefixTrie) bredthRangerIter {
-	return newBredthIter(root, false)
+func NewBredthIter(r Ranger) bredthRangerIter {
+	return newBredthIter(r, false)
 }
 
 // A bredth-first iterator that will return only the largest netblocks with an entry
-func NewShallowBredthIter(root *prefixTrie) bredthRangerIter {
-	return newBredthIter(root, true)
+func NewShallowBredthIter(r Ranger) bredthRangerIter {
+	return newBredthIter(r, true)
 }
-func newBredthIter(root *prefixTrie, shallow bool) bredthRangerIter {
+func newBredthIter(r Ranger, shallow bool) bredthRangerIter {
+	root, ok := r.(*prefixTrie)
+	if !ok {
+		panic(fmt.Errorf("Invalid type for bredthRangerIter"))
+	}
 	iter := bredthRangerIter{
 		node:    root,
 		path:    list.New(),
