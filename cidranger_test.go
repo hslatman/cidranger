@@ -156,6 +156,42 @@ func TestSubnets(t *testing.T) {
 	}
 }
 
+func TestBredthRangerIter(t *testing.T) {
+	cases := []struct {
+		version  rnet.IPVersion
+		inserts  []string
+		expected []string
+		name     string
+	}{
+		{rnet.IPv4, []string{}, []string{}, "empty"},
+		{rnet.IPv4, []string{"1.2.3.4/15"}, []string{"1.2.3.4/15"}, "single v4"},
+		{rnet.IPv4, []string{"255.0.0.0/8", "0.0.0.0/8"}, []string{"0.0.0.0/8", "255.0.0.0/8"}, "ordering v4"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert)
+				err := trie.Insert(NewBasicRangerEntry(*network))
+				assert.NoError(t, err)
+			}
+			var expectedEntries []net.IPNet
+			for _, expected := range tc.expected {
+				_, network, _ := net.ParseCIDR(expected)
+				expectedEntries = append(expectedEntries, (*network))
+			}
+			var resultEntries []net.IPNet
+			iter := NewBredthIter(trie.(*prefixTrie))
+			for iter.Next() {
+				entry := iter.Get()
+				resultEntries = append(resultEntries, entry.Network())
+			}
+			assert.Equal(t, expectedEntries, resultEntries)
+		})
+	}
+
+}
+
 /*
  ******************************************************************
  Benchmarks.

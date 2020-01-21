@@ -40,6 +40,7 @@ To get a list of all IPv4/IPv6 rangers respectively:
 package cidranger
 
 import (
+	"container/list"
 	"fmt"
 	"net"
 
@@ -118,4 +119,62 @@ func Subnets(base net.IPNet, prefixlen int) (subnets []net.IPNet, err error) {
 		subnets = append(subnets, subnet.IPNet)
 	}
 	return
+}
+
+// RangerIter is an interface to use with an iterator-like pattern
+// ri := RangerIter(x Ranger)
+// for ri.Next() {
+//     entry := ri.Get()
+//     ...
+// }
+// if err := ri.Error(); err != nil {
+//     ...
+// }
+// While it's not really an iterator, this is exactly what bufio.Scanner does.
+// Basically the idea is to have an Error() method which you call after
+// iteration is complete to see whether iteration terminated because it was done
+// or because an error was encountered midway through.
+type RangerIter interface {
+	Next() bool
+	Get() RangerEntry
+	Error() error
+}
+
+type bredthRangerIter struct {
+	path *list.List
+	node *prefixTrie
+}
+
+func NewBredthIter(root *prefixTrie) bredthRangerIter {
+	iter := bredthRangerIter{
+		node: root,
+		path: list.New(),
+	}
+	iter.path.PushBack(root)
+	return iter
+}
+
+func (i *bredthRangerIter) Next() bool {
+	for i.path.Len() > 0 {
+		element := i.path.Front()
+		i.path.Remove(element)
+		i.node = element.Value.(*prefixTrie)
+		for _, child := range i.node.children {
+			if child != nil {
+				i.path.PushBack(child)
+			}
+		}
+		if i.node.hasEntry() {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *bredthRangerIter) Get() RangerEntry {
+	return i.node.entry
+}
+
+func (i *bredthRangerIter) Error() error {
+	return nil
 }
