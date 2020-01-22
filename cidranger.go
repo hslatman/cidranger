@@ -109,6 +109,7 @@ func NewIPv4PCTrieRanger() Ranger {
 }
 
 // Util function to leverage the subnet method on std lib net.IPNets
+// If prefixlen is 0, return the immediate subnets, e.g. /15->/16
 func Subnets(base net.IPNet, prefixlen int) (subnets []net.IPNet, err error) {
 	network := rnet.NewNetwork(base)
 	subnetworks, err := network.Subnet(prefixlen)
