@@ -248,7 +248,7 @@ func (n Network) Next() Network {
 	newIP := make(NetworkNumber, len(n.Number))
 	copy(newIP, n.Number)
 	prefix, all := n.IPNet.Mask.Size()
-	incr := uint32(1) << ((all - prefix) % BitsPerUint32)
+	incr := uint32(1) << uint32((all-prefix)%BitsPerUint32)
 	i := (prefix - 1) / BitsPerUint32
 	newIP[i] += incr
 	// if rollover one of the uint32s, need to increment next chunk
