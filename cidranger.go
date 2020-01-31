@@ -93,6 +93,7 @@ type Ranger interface {
 	ContainingNetworks(ip net.IP) ([]RangerEntry, error)
 	CoveredNetworks(network net.IPNet) ([]RangerEntry, error)
 	Len() int
+	String() string
 	MissingNetworks() ([]net.IPNet, error)
 }
 

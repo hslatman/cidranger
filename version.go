@@ -1,6 +1,7 @@
 package cidranger
 
 import (
+	"fmt"
 	"net"
 
 	rnet "github.com/censys/cidranger/net"
@@ -77,6 +78,11 @@ func (v *versionedRanger) MissingNetworks() ([]net.IPNet, error) {
 // Len returns number of networks in ranger.
 func (v *versionedRanger) Len() int {
 	return v.ipV4Ranger.Len() + v.ipV6Ranger.Len()
+}
+
+// String returns a string representation of the networks
+func (v *versionedRanger) String() string {
+	return fmt.Sprintf("%s\n%s", v.ipV4Ranger.String(), v.ipV6Ranger.String())
 }
 
 func (v *versionedRanger) getRangerForIP(ip net.IP) (Ranger, error) {

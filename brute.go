@@ -119,6 +119,11 @@ func (b *bruteRanger) Len() int {
 	return len(b.ipV4Entries) + len(b.ipV6Entries)
 }
 
+// String returns a string representation of the networks
+func (b *bruteRanger) String() string {
+	return fmt.Sprintf("%s\n%s", b.ipV4Entries, b.ipV6Entries)
+}
+
 func (b *bruteRanger) getEntriesByVersion(ip net.IP) (map[string]RangerEntry, error) {
 	if ip.To4() != nil {
 		return b.ipV4Entries, nil
