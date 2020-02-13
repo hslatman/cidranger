@@ -291,6 +291,7 @@ func TestNetworkEqual(t *testing.T) {
 		name  string
 	}{
 		{"192.128.0.0/24", "192.128.0.0/24", true, "IPv4 equals"},
+		{"192.128.0.1/24", "192.128.0.0/24", true, "IPv4 equals trailing"},
 		{"192.128.0.0/24", "192.128.0.0/23", false, "IPv4 not equals"},
 		{"8000::/24", "8000::/24", true, "IPv6 equals"},
 		{"8000::/24", "8000::/23", false, "IPv6 not equals"},

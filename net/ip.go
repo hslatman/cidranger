@@ -213,17 +213,15 @@ func (n Network) Covers(o Network) bool {
 	if len(n.Number) != len(o.Number) {
 		return false
 	}
-	nMaskSize, _ := n.IPNet.Mask.Size()
-	oMaskSize, _ := o.IPNet.Mask.Size()
-	return n.Contains(o.Number) && nMaskSize <= oMaskSize
+	return n.Contains(o.Number) && n.MaskLen() <= o.MaskLen()
 }
 
 // LeastCommonBitPosition returns the smallest position of the preceding common
 // bits of the 2 networks, and returns an error ErrNoGreatestCommonBit
 // if the two network number diverges from the first bit.
 func (n Network) LeastCommonBitPosition(n1 Network) (uint, error) {
-	maskSize, _ := n.IPNet.Mask.Size()
-	if maskSize1, _ := n1.IPNet.Mask.Size(); maskSize1 < maskSize {
+	maskSize := n.MaskLen()
+	if maskSize1 := n1.MaskLen(); maskSize1 < maskSize {
 		maskSize = maskSize1
 	}
 	maskPosition := len(n1.Number)*BitsPerUint32 - maskSize
@@ -236,11 +234,25 @@ func (n Network) LeastCommonBitPosition(n1 Network) (uint, error) {
 
 // Equal is the equality test for 2 networks.
 func (n Network) Equal(n1 Network) bool {
-	return n.String() == n1.String()
+	// mask the numbers in case of trailing bits after the mask
+	number, err := n.Mask.Mask(n.Number)
+	if err != nil {
+		panic(err)
+	}
+	number1, _ := n1.Mask.Mask(n1.Number)
+	if err != nil {
+		panic(err)
+	}
+	return number.Equal(number1) && n.Mask.Equal(n1.Mask)
 }
 
 func (n Network) String() string {
 	return n.IPNet.String()
+}
+
+func (n Network) MaskLen() int {
+	masklen, _ := n.IPNet.Mask.Size()
+	return masklen
 }
 
 // Next returns the next logical Network with the same mask
@@ -283,6 +295,20 @@ func (m NetworkNumberMask) Mask(n NetworkNumber) (NetworkNumber, error) {
 		result[3] = m[3] & n[3]
 	}
 	return result, nil
+}
+
+// Equal is the equality test for 2 network number masks.
+func (n NetworkNumberMask) Equal(n1 NetworkNumberMask) bool {
+	if len(n) != len(n1) {
+		return false
+	}
+	if n[0] != n1[0] {
+		return false
+	}
+	if len(n) == IPv6Uint32Count {
+		return n[1] == n1[1] && n[2] == n1[2] && n[3] == n1[3]
+	}
+	return true
 }
 
 // NextIP returns the next sequential ip.

@@ -344,6 +344,68 @@ func TestPrefixTrieContains(t *testing.T) {
 	}
 }
 
+func TestPrefixTrieContainsNetwork(t *testing.T) {
+	cases := []struct {
+		version  rnet.IPVersion
+		inserts  []string
+		expected []string
+		missing  []string
+		name     string
+	}{
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24"},
+			[]string{"192.168.0.0/24"},
+			[]string{},
+			"basic contains",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24", "192.168.0.0/25"},
+			[]string{},
+			[]string{"192.168.0.0/23"},
+			"basic not contains",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24"},
+			[]string{"192.168.0.1/24"},
+			[]string{},
+			"basic contains, mismatch bit",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/25", "192.168.0.128/25"},
+			[]string{},
+			[]string{"192.168.0.1/24"},
+			"contains, empty parent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert)
+				err := trie.Insert(NewBasicRangerEntry(*network))
+				assert.NoError(t, err)
+			}
+			for _, expected := range tc.expected {
+				_, network, _ := net.ParseCIDR(expected)
+				contains, err := trie.ContainsNetwork(*network)
+				assert.NoError(t, err)
+				assert.True(t, contains)
+			}
+			for _, expected := range tc.missing {
+				_, network, _ := net.ParseCIDR(expected)
+				contains, err := trie.ContainsNetwork(*network)
+				assert.NoError(t, err)
+				assert.False(t, contains)
+			}
+		})
+	}
+}
+
 func TestPrefixTrieContainingNetworks(t *testing.T) {
 	cases := []struct {
 		version  rnet.IPVersion

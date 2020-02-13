@@ -74,6 +74,21 @@ func (b *bruteRanger) Contains(ip net.IP) (bool, error) {
 	return false, nil
 }
 
+// ContainsNetwork returns bool indicating whether the exact network is contained.
+func (b *bruteRanger) ContainsNetwork(network net.IPNet) (bool, error) {
+	entries, err := b.getEntriesByVersion(network.IP)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		entrynet := entry.Network()
+		if entrynet.String() == network.String() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ContainingNetworks returns all RangerEntry(s) that given ip contained in.
 func (b *bruteRanger) ContainingNetworks(ip net.IP) ([]RangerEntry, error) {
 	entries, err := b.getEntriesByVersion(ip)

@@ -108,6 +108,16 @@ func (p *prefixTrie) Contains(ip net.IP) (bool, error) {
 	return p.contains(nn)
 }
 
+// ContainsNetwork returns boolean indicating whether given network is any
+// of the inserted networks.
+func (p *prefixTrie) ContainsNetwork(network net.IPNet) (bool, error) {
+	n := rnet.NewNetwork(network)
+	if n.Number == nil {
+		return false, ErrInvalidNetworkInput
+	}
+	return p.containsNetwork(n)
+}
+
 // ContainingNetworks returns the list of RangerEntry(s) the given ip is
 // contained in in ascending prefix order.
 func (p *prefixTrie) ContainingNetworks(ip net.IP) ([]RangerEntry, error) {
@@ -221,6 +231,27 @@ func (p *prefixTrie) contains(number rnet.NetworkNumber) (bool, error) {
 	child := p.children[bit]
 	if child != nil {
 		return child.contains(number)
+	}
+	return false, nil
+}
+
+func (p *prefixTrie) containsNetwork(network rnet.Network) (bool, error) {
+	if p.network.Equal(network) {
+		return p.hasEntry(), nil
+	}
+	if !p.network.Contains(network.Number) {
+		return false, nil
+	}
+	if p.targetBitPosition() < 0 {
+		return false, nil
+	}
+	bit, err := p.targetBitFromIP(network.Number)
+	if err != nil {
+		return false, err
+	}
+	child := p.children[bit]
+	if child != nil {
+		return child.containsNetwork(network)
 	}
 	return false, nil
 }

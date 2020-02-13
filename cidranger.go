@@ -87,13 +87,24 @@ func NewBasicRangerEntry(ipNet net.IPNet) RangerEntry {
 
 // Ranger is an interface for cidr block containment lookups.
 type Ranger interface {
+	// Insert a RangerEntry
 	Insert(entry RangerEntry) error
+	// Remove a network from the Ranger, returning its RangerEntry
 	Remove(network net.IPNet) (RangerEntry, error)
+	// ContainsNetwork returns true if the ip is covered in the Ranger
 	Contains(ip net.IP) (bool, error)
+	// ContainsNetwork returns true if the exact network is in the Ranger
+	ContainsNetwork(network net.IPNet) (bool, error)
+	// ContainingNetworks returns all RangerEntry that contain ip
 	ContainingNetworks(ip net.IP) ([]RangerEntry, error)
+	// CoveredNetworks returns all networks that are subnets of network
 	CoveredNetworks(network net.IPNet) ([]RangerEntry, error)
+	// Len returns number of entries in the Ranger
 	Len() int
+	// String returns a representation for visualization and debugging
 	String() string
+	// MissingNetworks determines the list of CIDR blocks out of the
+	// address space which are not contained in the Ranger
 	MissingNetworks() ([]net.IPNet, error)
 }
 

@@ -46,6 +46,14 @@ func (v *versionedRanger) Contains(ip net.IP) (bool, error) {
 	return ranger.Contains(ip)
 }
 
+func (v *versionedRanger) ContainsNetwork(network net.IPNet) (bool, error) {
+	ranger, err := v.getRangerForIP(network.IP)
+	if err != nil {
+		return false, err
+	}
+	return ranger.ContainsNetwork(network)
+}
+
 func (v *versionedRanger) ContainingNetworks(ip net.IP) ([]RangerEntry, error) {
 	ranger, err := v.getRangerForIP(ip)
 	if err != nil {
