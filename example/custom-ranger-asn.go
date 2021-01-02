@@ -1,5 +1,5 @@
 /*
-	Example of how to extend github.com/yl2chen/cidranger
+	Example of how to extend github.com/hslatman/cidranger
 
 	This adds ASN as a string field, along with methods to get the ASN and the CIDR as strings
 
@@ -12,7 +12,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/yl2chen/cidranger"
+	"github.com/hslatman/cidranger"
 )
 
 // custom structure that conforms to RangerEntry interface

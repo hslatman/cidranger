@@ -354,6 +354,68 @@ func TestPrefixTrieContains(t *testing.T) {
 	}
 }
 
+func TestPrefixTrieContainsNetwork(t *testing.T) {
+	cases := []struct {
+		version  rnet.IPVersion
+		inserts  []string
+		expected []string
+		missing  []string
+		name     string
+	}{
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24"},
+			[]string{"192.168.0.0/24"},
+			[]string{},
+			"basic contains",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24", "192.168.0.0/25"},
+			[]string{},
+			[]string{"192.168.0.0/23"},
+			"basic not contains",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/24"},
+			[]string{"192.168.0.1/24"},
+			[]string{},
+			"basic contains, mismatch bit",
+		},
+		{
+			rnet.IPv4,
+			[]string{"192.168.0.0/25", "192.168.0.128/25"},
+			[]string{},
+			[]string{"192.168.0.1/24"},
+			"contains, empty parent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert)
+				err := trie.Insert(NewBasicRangerEntry(*network))
+				assert.NoError(t, err)
+			}
+			for _, expected := range tc.expected {
+				_, network, _ := net.ParseCIDR(expected)
+				contains, err := trie.ContainsNetwork(*network)
+				assert.NoError(t, err)
+				assert.True(t, contains)
+			}
+			for _, expected := range tc.missing {
+				_, network, _ := net.ParseCIDR(expected)
+				contains, err := trie.ContainsNetwork(*network)
+				assert.NoError(t, err)
+				assert.False(t, contains)
+			}
+		})
+	}
+}
+
 func TestPrefixTrieContainingNetworks(t *testing.T) {
 	cases := []struct {
 		version  rnet.IPVersion
@@ -486,6 +548,97 @@ func TestPrefixTrieCoveredNetworks(t *testing.T) {
 			}
 			_, snet, _ := net.ParseCIDR(tc.search)
 			networks, err := trie.CoveredNetworks(*snet)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedEntries, networks)
+		})
+	}
+}
+
+type missingNetworkTest struct {
+	version  rnet.IPVersion
+	inserts  []string
+	networks []string
+	name     string
+}
+
+var missingNetworkTests = []missingNetworkTest{
+	{
+		rnet.IPv4,
+		[]string{},
+		[]string{"0.0.0.0/0"},
+		"empty missing networks",
+	},
+	{
+		rnet.IPv4,
+		[]string{"0.0.0.0/1"},
+		[]string{"128.0.0.0/1"},
+		"/1 missing networks",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/2"},
+		[]string{"64.0.0.0/2"},
+		"path compressed network segment is accounted for",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/5"},
+		[]string{"64.0.0.0/2", "32.0.0.0/3", "16.0.0.0/4", "8.0.0.0/5"},
+		"multiple path compressed segments",
+	},
+	{
+		rnet.IPv4,
+		[]string{"0.0.0.0/2", "224.0.0.0/3"},
+		[]string{"64.0.0.0/2", "128.0.0.0/2", "192.0.0.0/3"},
+		"linear path compressed segments",
+	},
+	{
+		rnet.IPv4,
+		[]string{"80.0.0.0/5"},
+		[]string{"0.0.0.0/2", "96.0.0.0/3", "64.0.0.0/4", "88.0.0.0/5", "128.0.0.0/1"},
+		"non-linear path compressed segment",
+	},
+	{
+		rnet.IPv4,
+		[]string{"0.0.0.0/3", "64.0.0.0/3", "96.0.0.0/3", "160.0.0.0/3", "192.0.0.0/3"},
+		[]string{"32.0.0.0/3", "128.0.0.0/3", "224.0.0.0/3"},
+		"same-level missing blocks",
+	},
+	{
+		rnet.IPv4,
+		[]string{"128.0.0.0/1", "0.0.0.0/32"},
+		[]string{"64.0.0.0/2", "32.0.0.0/3", "16.0.0.0/4", "8.0.0.0/5", "4.0.0.0/6",
+			"2.0.0.0/7", "1.0.0.0/8", "0.128.0.0/9", "0.64.0.0/10", "0.32.0.0/11",
+			"0.16.0.0/12", "0.8.0.0/13", "0.4.0.0/14", "0.2.0.0/15", "0.1.0.0/16",
+			"0.0.128.0/17", "0.0.64.0/18", "0.0.32.0/19", "0.0.16.0/20", "0.0.8.0/21",
+			"0.0.4.0/22", "0.0.2.0/23", "0.0.1.0/24", "0.0.0.128/25", "0.0.0.64/26",
+			"0.0.0.32/27", "0.0.0.16/28", "0.0.0.8/29", "0.0.0.4/30", "0.0.0.2/31",
+			"0.0.0.1/32"},
+		"/32 missing handled correctly",
+	},
+	{
+		rnet.IPv6,
+		[]string{"::/1"},
+		[]string{"8000::/1"},
+		"/1 missing networks v6",
+	},
+}
+
+func TestPrefixTrieMissingNetworks(t *testing.T) {
+	for _, tc := range missingNetworkTests {
+		t.Run(tc.name, func(t *testing.T) {
+			trie := newPrefixTree(tc.version)
+			for _, insert := range tc.inserts {
+				_, network, _ := net.ParseCIDR(insert)
+				err := trie.Insert(NewBasicRangerEntry(*network))
+				assert.NoError(t, err)
+			}
+			var expectedEntries []net.IPNet
+			for _, network := range tc.networks {
+				_, net, _ := net.ParseCIDR(network)
+				expectedEntries = append(expectedEntries, (*net))
+			}
+			networks, err := trie.MissingNetworks()
 			assert.NoError(t, err)
 			assert.Equal(t, expectedEntries, networks)
 		})
